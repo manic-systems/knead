@@ -1,0 +1,106 @@
+networks {
+   network "clouds" {
+      url "https://ip-ranges.amazonaws.com/ip-ranges.json" filter="jq" jq=".prefixes[].ip_prefix"
+      url "https://ip-ranges.amazonaws.com/ip-ranges.json" filter="jq" jq=".ipv6_prefixes[].ipv6_prefix"
+      url "https://www.gstatic.com/ipranges/cloud.json" filter="jq" jq=".prefixes[].ipv4Prefix"
+      url "https://www.gstatic.com/ipranges/cloud.json" filter="jq" jq=".prefixes[].ipv6Prefix"
+      asn 136907
+      asn 45102
+      asn 21859
+   }
+}
+
+conditions {
+   condition "forgejo" expr=(rhai)#"host == "git.example.org""#
+   condition "opengist" expr=(rhai)#"host == "gist.example.org""#
+}
+
+crawlers {
+   crawler "googlebot" { suffixes ".googlebot.com" ".google.com" }
+   crawler "bingbot" { suffixes ".search.msn.com" }
+   crawler "yandex" { suffixes ".yandex.ru" ".yandex.net" ".yandex.com" }
+   crawler "applebot" { suffixes ".applebot.apple.com" }
+}
+
+challenges {
+   challenge "cookie" runtime="cookie" duration=86400
+   challenge "pow" runtime="pow-sha256" difficulty=4 duration=86400
+}
+
+mazes {
+   maze "default" { }
+}
+
+rules {
+   rule "timed-out" condition=(rhai)#"lease["active"]"# action="deny" http-code=429
+   rule "tarball" condition=(rhai)#"(forgejo) && path.contains("/archive/")"# action="report" kind="tarball"
+   rule "clone" condition=(rhai)#"(forgejo) && path.contains("/git-upload-pack")"# action="report" kind="clone"
+   rule "static" action="pass" {
+      condition (rhai)#"""
+         (forgejo) && (
+            ["/assets/", "/repo-avatars/", "/avatars/", "/avatar/", "/user/avatar/", "/attachments/", "/.well-known/"].some(|p| path.starts_with(p))
+               || path in ["/favicon.ico", "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png", "/robots.txt", "/security.txt", "/app-ads.txt", "/ads.txt", "/crossdomain.xml"]
+         )
+         """#
+   }
+   rule "git" action="pass" {
+      condition (rhai)#"""
+         (forgejo) && (
+            ["/git-upload-pack", "/git-receive-pack", "/info/refs", "/info/lfs", "/objects/", ".git/"].some(|p| path.contains(p))
+               || path.ends_with(".git") || path.ends_with("/HEAD") || (method == "GET" && query.contains("go-get=1"))
+         )
+         """#
+   }
+   rule "api" action="pass" {
+      condition (rhai)#"""
+         (forgejo) && (
+            ["/api/", "/login/oauth/", "/captcha/", "/metrics", "/v2"].some(|p| path.starts_with(p))
+               || [".keys", ".gpg", "/branches/list", "/tags/list", "/-/summary-card"].some(|p| path.ends_with(p))
+               || path in ["/-/markup", "/user/events", "/ssh_info", "/sitemap.xml"] || path.contains("/releases/summary-card/")
+         )
+         """#
+   }
+   rule "downloads" action="pass" {
+      condition (rhai)#"""
+         (forgejo) && (
+            ["/raw/branch/", "/raw/commit/", "/raw/tag/", "/releases/download/", "/media/"].some(|p| path.contains(p))
+               || (path.contains("/archive/") && !user_agent.starts_with("Mozilla/"))
+         )
+         """#
+   }
+   rule "search-engines" condition=(rhai)#"(forgejo) && crawler["verified"]"# action="pass"
+   rule "probes" condition=(rhai)#"(forgejo) && trap["path"]"# action="smear"
+   rule "scrapers" action="tarpit" maze="default" {
+      condition (rhai)#"""
+         (forgejo) && (
+            trap["user_agent"] || trap["impersonator"]
+               || ["Lightpanda", "PanguBot", "AI2Bot", "BLEXBot", "HeadlessChrome"].some(|p| user_agent.contains(p))
+         )
+         """#
+   }
+   rule "empty-agent" condition=(rhai)#"(forgejo) && user_agent == """# action="deny"
+   rule "wall" action="challenge" {
+      challenges "pow"
+      condition (rhai)#"""
+         (forgejo) && (
+            ["/user/sign_up", "/user/login", "/user/oauth2/", "/user/activate", "/user/settings", "/explore/"].some(|p| path.starts_with(p))
+               || path in ["/repo/create", "/repo/migrate", "/org/create"]
+               || ["/issues/new", "/archive/", "/src/commit/", "/compare/", "/commits/", "/blame/", "/search", "/find/", "/activity"].some(|p| path.contains(p))
+               || path.ends_with("/graph") || query.contains("q=")
+         )
+         """#
+   }
+   rule "writes" condition=(rhai)#"(forgejo) && method != "GET" && method != "HEAD""# action="pass"
+   rule "warm" condition=(rhai)#"(forgejo)"# action="check" { challenges "pow" }
+}
+
+scoring rate-capacity=65536 {
+   scorecard "forgejo" condition=(rhai)#"(forgejo)"# mode="enforce" {
+      signal "burst" condition=(rhai)#"rate["available"] && rate["10s"] > 60"# weight=40
+      signal "flood" condition=(rhai)#"rate["available"] && rate["10s"] > 200"# weight=70
+      signal "cloud" condition=(rhai)#"networks["clouds"]"# weight=30
+      signal "poison-return" condition=(rhai)#"poison["returned"]"# weight=100
+      threshold 31 action="challenge" { challenges "cookie" }
+      threshold 100 action="tarpit" maze="default"
+   }
+}

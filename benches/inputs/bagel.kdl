@@ -1,0 +1,35 @@
+bind { address "[::1]:8080" }
+client-ip-header "x-real-ip"
+trusted-proxies "::1/128" "127.0.0.1/32"
+backends {
+   backend "git.example.org" { url "http://[::1]:3000"; ip-header "X-Real-Ip" }
+   backend "gist.example.org" { url "http://[::1]:6157"; ip-header "X-Real-Ip" }
+}
+policy-dir "/etc/bagel/policy"
+defense {
+   metrics-addr "[::1]:9100"
+   enforcement mode="observe"
+   sources { source "web" kind="web" }
+   policies {
+      policy "probes" source="web" max-attempts=3 findtime-secs=600 {
+         detector kind="json" address-pointer="/address" { equals "/kind" "smear" }
+         ban duration-secs=3600 factor=4 max-duration-secs=86400
+         action kind="drop-all"
+      }
+      policy "tarballs" source="web" max-attempts=3 findtime-secs=3600 {
+         detector kind="json" address-pointer="/address" group-key-pointer="/group_key" { equals "/kind" "tarball" }
+         ban duration-secs=3600 factor=4 max-duration-secs=86400
+         action kind="drop-all"
+      }
+      policy "clones" source="web" max-attempts=30 findtime-secs=3600 {
+         detector kind="json" address-pointer="/address" group-key-pointer="/group_key" { equals "/kind" "clone" }
+         ban duration-secs=3600 factor=4 max-duration-secs=86400
+         action kind="drop-all"
+      }
+      policy "gist-archives" source="web" max-attempts=3 findtime-secs=3600 {
+         detector kind="json" address-pointer="/address" group-key-pointer="/group_key" { equals "/kind" "gist-archive" }
+         ban duration-secs=3600 factor=4 max-duration-secs=86400
+         action kind="drop-all"
+      }
+   }
+}

@@ -1,0 +1,19 @@
+bin = [
+  { bench = false, doc = false, name = "parse", path = "fuzz_targets/parse.rs", test = false },
+  { bench = false, doc = false, name = "decode", path = "fuzz_targets/decode.rs", test = false },
+  { bench = false, doc = false, name = "lenient", path = "fuzz_targets/lenient.rs", test = false },
+]
+
+[package]
+name    = "knead-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+knead         = { path = ".." }
+knead-derive  = { path = "../knead-derive" }
+libfuzzer-sys = "0.4"
