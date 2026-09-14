@@ -42,6 +42,10 @@ miette = { default-features = false, optional = true, version = "7.6.0" }
 criterion    = { default-features = false, version = "0.8.2" }
 knead-derive = { path = "knead-derive", version = "0.1.0" }
 
+[profile.release]
+lto   = "thin"
+strip = true
+
 [lints]
 workspace = true
 
