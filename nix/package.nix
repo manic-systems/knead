@@ -2,12 +2,12 @@
   lib,
   rustPlatform,
   stdenv,
-  clang,
+  buildPackages,
   specCorpusV1,
   specCorpusV2,
-  wild ? null,
 }:
 let
+  inherit (buildPackages) clang wild;
   cargoTOML = (lib.importTOML ../Cargo.toml).workspace.package;
 
   # wild + clang are only used on Linux tier-1 arches
@@ -50,7 +50,7 @@ rustPlatform.buildRustPackage {
     KNEAD_SPEC_CORPUS_V2 = specCorpusV2;
   }
   // lib.optionalAttrs hasWild {
-    RUSTFLAGS = "-Clinker=${clang}/bin/clang -Clink-arg=--ld-path=wild";
+    RUSTFLAGS = "-Clinker=${clang}/bin/${clang.targetPrefix}clang -Clink-arg=--ld-path=wild";
   };
 
   enableParallelBuilding = true;
