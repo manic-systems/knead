@@ -18,7 +18,12 @@
   outputs =
     { self, ... }@inputs:
     let
-      inherit (inputs) nixpkgs fenix kdl kdl-v1;
+      inherit (inputs)
+        nixpkgs
+        fenix
+        kdl
+        kdl-v1
+        ;
       inherit (nixpkgs) lib;
       forAllSystems = lib.genAttrs (lib.systems.doubles.linux ++ lib.systems.doubles.darwin);
       pkgsFor = system: nixpkgs.legacyPackages.${system} or (import nixpkgs { inherit system; });
