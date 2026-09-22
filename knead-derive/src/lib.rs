@@ -486,7 +486,7 @@ fn field_value(shape: &FieldShape<'_>, bounds: &mut Bounds) -> Result<Tokens> {
       Source::NodeName => {
          str_bounds(ty, bounds);
          Ok(quote!(decoder.name().value.parse::<#ty>()
-            .map_err(|error| ::knead::errors::Error::conversion(decoder.name().span, error))?))
+            .map_err(|error| ::knead::errors::Error::conversion(decoder.name().span, &error))?))
       },
    }
 }
